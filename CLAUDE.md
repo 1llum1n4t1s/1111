@@ -327,7 +327,10 @@ ping and traceroute).
 adapters, and `NotPresent` pseudo-devices. The DNS dropdown must match what `ncpa.cpl` shows. The pure filter keeps
 Ethernet/Wireless80211 that are Present, drops a "binding child" if its Description is `<another adapter's
 Description>-...` (structural — works for unknown antivirus/VPN LWFs without a hardcoded name list), and drops
-`Wi-Fi Direct Virtual Adapter` by its (locale-stable, English) driver description. VPN TAP / Hyper-V vEthernet stay.
+`Wi-Fi Direct Virtual Adapter` and `WAN Miniport*` by their (locale-stable, English) driver descriptions — most
+WAN Miniports report as Ppp and die at the type check, but WAN Miniport (IP)/(IPv6)/(Network Monitor) report as
+Ethernet+Up and leaked into the dropdown as 「ローカル エリア接続* 6〜8」 (real machine, 2026-07-08). VPN TAP /
+Hyper-V vEthernet stay.
 
 ### Adapter details (`NetworkAdapterDetails`, read-only, both platforms)
 

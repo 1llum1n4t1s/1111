@@ -61,6 +61,16 @@ public static class WindowsNetworkAdapterFilter
             return false;
         }
 
+        // WAN Miniport (Windows 標準の VPN / ダイヤルアップ用仮想デバイス群)。ncpa.cpl には表示されず、
+        // DNS 設定対象でもない。多くは Ppp タイプで上の種別判定に落ちるが、WAN Miniport (IP) /
+        // (IPv6) / (Network Monitor) の 3 つは Ethernet タイプで報告されてすり抜けるため
+        // (実機確認 2026-07-08: 「ローカル エリア接続* 6〜8」としてドロップダウンに混入)、
+        // Wi-Fi Direct と同じくロケール非依存の英語ドライバ名で除外する。
+        if (description.StartsWith("WAN Miniport", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return true;
     }
 }

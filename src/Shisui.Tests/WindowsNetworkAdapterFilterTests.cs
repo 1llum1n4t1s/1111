@@ -108,6 +108,33 @@ public class WindowsNetworkAdapterFilterTests
     }
 
     [TestMethod]
+    public void WanMiniport_IsExcluded()
+    {
+        // 実機確認 (2026-07-08、別 PC): WAN Miniport (IP) / (IPv6) / (Network Monitor) は
+        // Ethernet タイプ・Up 状態で報告され、種別判定をすり抜けてドロップダウンに
+        // 「ローカル エリア接続* 6〜8」として混入していた。ncpa.cpl 非表示の Windows 標準
+        // 仮想デバイスなので除外する。
+        string[] wanMiniports =
+        [
+            "WAN Miniport (IP)",
+            "WAN Miniport (IPv6)",
+            "WAN Miniport (Network Monitor)",
+            "WAN Miniport (SSTP)",
+            "WAN Miniport (PPTP)",
+            "WAN Miniport (PPPOE)",
+            "WAN Miniport (L2TP)",
+            "WAN Miniport (IKEv2)",
+        ];
+
+        foreach (var desc in wanMiniports)
+        {
+            Assert.IsFalse(WindowsNetworkAdapterFilter.IsUserConfigurable(
+                desc, NetworkInterfaceType.Ethernet, OperationalStatus.Up, wanMiniports),
+                $"{desc} は除外されるべき");
+        }
+    }
+
+    [TestMethod]
     public void NotPresentDevice_IsExcluded()
     {
         string[] all = ["Microsoft Kernel Debug Network Adapter"];
