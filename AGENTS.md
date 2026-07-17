@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (ChatGPT) and other coding agents working in this repository.
 
 ## Project Overview
 
@@ -12,7 +12,7 @@ options (including receive-window auto-tuning and MTU/jumbo-frame size), run a c
 `nbtstat` network maintenance commands, view read-only adapter details (MAC address / link speed), and clean up
 disconnected "ghost" network devices.
 
-**Language**: Japanese (UI, comments, commit messages, README are all in Japanese). This CLAUDE.md is in English
+**Language**: Japanese (UI, comments, commit messages, README are all in Japanese). This AGENTS.md is in English
 to match the reference project's documentation conventions; code comments and user-facing text remain Japanese.
 
 Architecture mirrors `RealTimeTranslator` (`C:\Users\IMT\dev\RealTimeTranslator`): Avalonia + CommunityToolkit.Mvvm
