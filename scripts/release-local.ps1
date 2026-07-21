@@ -293,9 +293,23 @@ try {
         $msiUrl = "$BaseUrl/$($msi.Name)"
         $response = Invoke-WebRequest -Method Head -Uri "${msiUrl}?_=$([Guid]::NewGuid().ToString('N'))" `
             -Headers @{ 'Cache-Control' = 'no-cache' } -TimeoutSec 30
-        $remoteLength = [long]$response.Headers.'Content-Length'
-        if ($remoteLength -ne $msi.Length) {
-            throw "remote MSI のサイズがローカルと一致しません: $msiUrl (remote=$remoteLength local=$($msi.Length))"
+        $remoteLengths = @($response.Headers.'Content-Length') |
+            ForEach-Object { $_ -split ',' } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }
+        if ($remoteLengths.Count -eq 0) {
+            throw "remote MSI の Content-Length を取得できません: $msiUrl"
+        }
+        foreach ($remoteLengthText in $remoteLengths) {
+            $remoteLength = 0L
+            if (-not [long]::TryParse(
+                    $remoteLengthText,
+                    [Globalization.NumberStyles]::Integer,
+                    [Globalization.CultureInfo]::InvariantCulture,
+                    [ref]$remoteLength) -or
+                $remoteLength -ne $msi.Length) {
+                throw "remote MSI のサイズがローカルと一致しません: $msiUrl (remote=$remoteLengthText local=$($msi.Length))"
+            }
         }
         Write-Host "  ✅ $msiUrl の配信サイズ一致"
     }
