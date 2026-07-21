@@ -195,16 +195,10 @@ public class WindowsPerMachineMigrationTests
         Assert.AreEqual(Path.Combine(systemDirectory, "msiexec.exe"), startInfo.FileName);
         Assert.IsTrue(startInfo.UseShellExecute);
         Assert.AreEqual("runas", startInfo.Verb);
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "/i",
-                msiPath,
-                $"VELOPACK_INSTALLDIR={Path.Combine(programFilesDirectory, "Shisui")}",
-                "/passive",
-                "/norestart",
-            },
-            startInfo.ArgumentList.ToArray());
+        Assert.AreEqual(
+            $"/i \"{msiPath}\" VELOPACK_INSTALLDIR=\"{Path.Combine(programFilesDirectory, "Shisui")}\" /passive /norestart",
+            startInfo.Arguments);
+        Assert.AreEqual(0, startInfo.ArgumentList.Count);
     }
 
     [TestMethod]
@@ -240,18 +234,10 @@ public class WindowsPerMachineMigrationTests
             programFilesDirectory,
             reinstallExistingProduct: true);
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "/i",
-                msiPath,
-                $"VELOPACK_INSTALLDIR={Path.Combine(programFilesDirectory, "Shisui")}",
-                "REINSTALL=ALL",
-                "REINSTALLMODE=vamus",
-                "/passive",
-                "/norestart",
-            },
-            startInfo.ArgumentList.ToArray());
+        Assert.AreEqual(
+            $"/i \"{msiPath}\" VELOPACK_INSTALLDIR=\"{Path.Combine(programFilesDirectory, "Shisui")}\" REINSTALL=ALL REINSTALLMODE=vamus /passive /norestart",
+            startInfo.Arguments);
+        Assert.AreEqual(0, startInfo.ArgumentList.Count);
     }
 
     [TestMethod]
