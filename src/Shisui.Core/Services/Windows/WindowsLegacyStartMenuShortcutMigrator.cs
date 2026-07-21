@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace Shisui.Core.Services.Windows;
@@ -8,6 +9,10 @@ namespace Shisui.Core.Services.Windows;
 /// </summary>
 public static class WindowsLegacyStartMenuShortcutMigrator
 {
+    private const int ShellChangeNotifyUpdateDirectory = 0x00001000;
+    private const uint ShellChangeNotifyPathUnicode = 0x0005;
+    private const uint ShellChangeNotifyFlushNoWait = 0x3000;
+    private const uint ShellChangeNotifyRecursive = 0x10000;
     private const string LegacyFolderName = "ゆろち";
     private const string ShortcutFileName = "Shisui.lnk";
 
@@ -18,7 +23,24 @@ public static class WindowsLegacyStartMenuShortcutMigrator
     [SupportedOSPlatform("windows")]
     public static void MigrateForCurrentUser()
     {
-        _ = TryMigrate(Environment.GetFolderPath(Environment.SpecialFolder.Programs));
+        _ = TryMigrateAndRefresh(
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            RefreshShellStartMenu);
+    }
+
+    /// <summary>
+    /// 旧ショートカットを移行し、移行済みの場合も Start メニューの古い表示キャッシュを更新する。
+    /// </summary>
+    internal static bool TryMigrateAndRefresh(string programsDirectory, Action<string> refreshShell)
+    {
+        ArgumentNullException.ThrowIfNull(refreshShell);
+
+        var migrated = TryMigrate(programsDirectory);
+        if (!string.IsNullOrWhiteSpace(programsDirectory) && Directory.Exists(programsDirectory))
+        {
+            refreshShell(programsDirectory);
+        }
+        return migrated;
     }
 
     /// <summary>
@@ -82,4 +104,30 @@ public static class WindowsLegacyStartMenuShortcutMigrator
             // 更新処理を妨げない。
         }
     }
+
+    [SupportedOSPlatform("windows")]
+    internal static void RefreshShellStartMenu(string programsDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(programsDirectory) || !Directory.Exists(programsDirectory))
+        {
+            return;
+        }
+
+        var pathPointer = Marshal.StringToHGlobalUni(programsDirectory);
+        try
+        {
+            SHChangeNotify(
+                ShellChangeNotifyUpdateDirectory,
+                ShellChangeNotifyPathUnicode | ShellChangeNotifyFlushNoWait | ShellChangeNotifyRecursive,
+                pathPointer,
+                IntPtr.Zero);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(pathPointer);
+        }
+    }
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
 }

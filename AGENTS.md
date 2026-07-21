@@ -72,9 +72,20 @@ Windows releases are installed by the signed Velopack **PerMachine MSI** under p
 publish the generated PerUser `Setup.exe`. Legacy `%LocalAppData%\Shisui` builds are the one-time exception:
 `WindowsPerMachineMigration` runs before whole-app elevation, downloads `Shisui-win.msi` from the fixed R2 origin,
 validates it with `WinVerifyTrust` plus the expected publisher CN, and invokes system `msiexec` with `runas`.
-The installed Program Files build then runs the old Velopack `Update.exe uninstall` and a no-reparse-point fallback
-cleanup, preserving `%APPDATA%\Shisui` settings/logs while removing the old executable tree, package cache,
-HKCU uninstall entry, and per-user shortcuts. A pending marker and HKCU RunOnce retry transient cleanup locks.
+The installed Program Files build never executes the user-writable legacy `Update.exe`; it performs a bounded,
+no-reparse-point cleanup directly, preserving `%APPDATA%\Shisui` settings/logs while removing the old executable
+tree, package cache, HKCU uninstall entry, and per-user shortcuts. A trusted PerMachine build also detects the
+exact legacy root on startup when the MSI was installed directly and no pending marker was created, including a
+partial residue containing only `Update.exe` or `packages`. Cleanup is allowed only when the registered stable
+executable, `.msi-installed` marker, current process location, and current process Authenticode publisher agree,
+so it never treats its own executable tree as the legacy target. The fallback continues past individually locked
+entries, while a pending marker and HKCU RunOnce retry whatever remains after transient cleanup locks.
+Known malformed MSI locations (`C:\Shisui` and `Program Files\ゆろち\Shisui`) are repaired only when the current
+process, registered stable executable, `.msi-installed` marker, and Authenticode publisher all agree. The repair
+downloads the fixed signed MSI, installs it under `Program Files\Shisui`, and records the exact old root in an
+administrator-writable HKLM marker before MSI execution. A same-ProductCode maintenance no-op falls back to
+`REINSTALL=ALL REINSTALLMODE=vamus`; only the two fixed legacy roots can be deleted, and arbitrary custom machine
+locations remain untouched.
 
 ## Architecture
 
@@ -498,10 +509,25 @@ need separate Apple notarization and is not set up).
   Its `OnAfterUpdateFastCallback` moves the legacy `StartMenu\\ゆろち\\Shisui.lnk` shortcut made through
   v1.0.7 into `StartMenuRoot` before Velopack recalculates shortcuts; normal startup retries the same idempotent
   migration if the hook encountered a transient file lock. The migrator never overwrites an existing root shortcut
-  and only removes the legacy folder when it is empty.
+  and only removes the legacy folder when it is empty. Both the move and the PerUser cleanup send a recursive
+  `SHChangeNotify(SHCNE_UPDATEDIR)` notification for the user's Programs folder so Windows Start does not retain
+  the removed legacy shortcut as a duplicate cached entry.
   A legacy PerUser install is then migrated to the signed PerMachine MSI before runtime elevation; cancellation
-  exits instead of continuing to run the user-writable build as administrator. New and migrated installs live in
-  Program Files, while user settings/logs stay in `%APPDATA%\Shisui` and survive the migration.
+  exits instead of continuing to run the user-writable build as administrator. The MSI normally installs under
+  Program Files, but also supports an administrator-selected machine location; migration completion therefore
+  accepts an out-of-Program-Files executable only when its HKLM install registration, `.msi-installed` marker,
+  and Authenticode publisher all verify. If a user installs the MSI directly while the old PerUser tree still
+  exists, the trusted PerMachine startup reconstructs the missing cleanup marker for the exact
+  `%LocalAppData%\Shisui` root and performs the same cleanup/retry flow. User settings/logs stay in
+  `%APPDATA%\Shisui` and survive the migration.
+  Velopack 1.2.0 currently emits a PerMachine MSI whose `INSTALLFOLDER` is directly under `TARGETDIR`, which Windows
+  resolves as `C:\Shisui` despite the documented Program Files behavior. `release-local.ps1` therefore runs
+  `set-msi-program-files-location.ps1` after `vpk pack`, rewrites the MSI Directory table to
+  `ProgramFiles64Folder\Shisui`, and re-signs the modified MSI before signature verification/upload. The in-app
+  migration also passes `VELOPACK_INSTALLDIR=<Program Files>\Shisui` to `msiexec` as a defense-in-depth override.
+  Clients already installed from a malformed MSI detect only the known `C:\Shisui` and
+  `Program Files\ゆろち\Shisui` roots, obtain consent, then use the same signed MSI to repair into Program Files;
+  an HKLM-protected marker and HKCU RunOnce preserve cleanup intent if Restart Manager terminates the old process.
   The check/download/apply **UI is the `VelopackUpdateDialog.Avalonia` package** (`UpdateDialogWindow.ShowAsync`),
   not hand-rolled — `UI/Services/UpdateService.cs` only builds the `UpdateManager(SimpleWebSource)` and exposes
   `TryCreateInstalledManager()` (returns null on dev/uninstalled builds). `VersionViewModel.ShowUpdateDialogAsync`

@@ -70,4 +70,18 @@ public class WindowsLegacyStartMenuShortcutMigratorTests
         Assert.AreEqual("other shortcut", File.ReadAllText(otherFile));
         Assert.IsTrue(File.Exists(Path.Combine(_programsDirectory, "Shisui.lnk")));
     }
+
+    [TestMethod]
+    public void TryMigrateAndRefresh_RootShortcutOnly_RefreshesShellWithoutMoving()
+    {
+        File.WriteAllText(Path.Combine(_programsDirectory, "Shisui.lnk"), "current shortcut");
+        string? refreshedDirectory = null;
+
+        var migrated = WindowsLegacyStartMenuShortcutMigrator.TryMigrateAndRefresh(
+            _programsDirectory,
+            directory => refreshedDirectory = directory);
+
+        Assert.IsFalse(migrated);
+        Assert.AreEqual(_programsDirectory, refreshedDirectory);
+    }
 }

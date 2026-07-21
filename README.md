@@ -75,6 +75,8 @@ Windows 版は署名済みPerMachine MSIを配布しています。[https://shis
 
 旧`Shisui-win-Setup.exe`版を利用中の場合は、更新後の初回起動時にMSI版への移行案内が表示されます。
 設定とログは保持され、移行完了後に旧`%LocalAppData%\Shisui`本体・Updater・パッケージキャッシュ・旧ショートカットが削除されます。
+また、旧MSIによって`C:\Shisui`または`Program Files\ゆろち\Shisui`へインストールされた環境では、
+初回起動時の案内に沿って正規の`Program Files\Shisui`へ修復移行し、旧インストール先を回収できます。
 
 ## ビルドして実行する
 

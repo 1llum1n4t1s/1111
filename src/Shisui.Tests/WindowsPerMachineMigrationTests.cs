@@ -50,15 +50,232 @@ public class WindowsPerMachineMigrationTests
     }
 
     [TestMethod]
-    public void IsPerMachineProcessPath_MsiMarkerExistsAboveCurrentDirectory_ReturnsTrue()
+    public void IsMsiProcessPath_CurrentProcessIsInsideRegisteredRoot_ReturnsTrue()
     {
-        var programFiles = Path.Combine(testRoot, "Program Files");
-        var installRoot = Path.Combine(programFiles, "ゆろち", "Shisui");
+        var installRoot = Path.Combine(testRoot, "CustomLocation", "Shisui");
         Directory.CreateDirectory(Path.Combine(installRoot, "current"));
         File.WriteAllText(Path.Combine(installRoot, ".msi-installed"), string.Empty);
         var processPath = Path.Combine(installRoot, "current", "Shisui.UI.exe");
+        var registeredExecutable = Path.Combine(installRoot, "Shisui.exe");
 
-        Assert.IsTrue(WindowsPerMachineMigration.IsPerMachineProcessPath(processPath, programFiles));
+        Assert.IsTrue(WindowsPerMachineMigration.IsMsiProcessPath(processPath, registeredExecutable));
+    }
+
+    [TestMethod]
+    public void IsMsiProcessPath_DifferentInstallRoot_ReturnsFalse()
+    {
+        var installRoot = Path.Combine(testRoot, "Installed", "Shisui");
+        Directory.CreateDirectory(installRoot);
+        File.WriteAllText(Path.Combine(installRoot, ".msi-installed"), string.Empty);
+        var processPath = Path.Combine(testRoot, "OtherLocation", "current", "Shisui.UI.exe");
+        var registeredExecutable = Path.Combine(installRoot, "Shisui.exe");
+
+        Assert.IsFalse(WindowsPerMachineMigration.IsMsiProcessPath(processPath, registeredExecutable));
+    }
+
+    [TestMethod]
+    public void IsMsiProcessPath_MsiMarkerIsMissing_ReturnsFalse()
+    {
+        var installRoot = Path.Combine(testRoot, "Installed", "Shisui");
+        var currentDirectory = Path.Combine(installRoot, "current");
+        Directory.CreateDirectory(currentDirectory);
+        var processPath = Path.Combine(currentDirectory, "Shisui.UI.exe");
+        var registeredExecutable = Path.Combine(installRoot, "Shisui.exe");
+
+        Assert.IsFalse(WindowsPerMachineMigration.IsMsiProcessPath(processPath, registeredExecutable));
+    }
+
+    [TestMethod]
+    public void GetKnownMisplacedPerMachineRoot_DriveRootInstall_ReturnsRoot()
+    {
+        var programFiles = Path.Combine(testRoot, "Program Files");
+        var misplacedRoot = Path.Combine(Path.GetPathRoot(programFiles)!, "Shisui");
+
+        var result = WindowsPerMachineMigration.GetKnownMisplacedPerMachineRoot(
+            Path.Combine(misplacedRoot, "Shisui.exe"),
+            programFiles);
+
+        Assert.AreEqual(Path.GetFullPath(misplacedRoot), result);
+    }
+
+    [TestMethod]
+    public void GetKnownMisplacedPerMachineRoot_AuthorFolderInstall_ReturnsRoot()
+    {
+        var programFiles = Path.Combine(testRoot, "Program Files");
+        var misplacedRoot = Path.Combine(programFiles, "ゆろち", "Shisui");
+
+        var result = WindowsPerMachineMigration.GetKnownMisplacedPerMachineRoot(
+            Path.Combine(misplacedRoot, "Shisui.exe"),
+            programFiles);
+
+        Assert.AreEqual(Path.GetFullPath(misplacedRoot), result);
+    }
+
+    [TestMethod]
+    public void GetKnownMisplacedPerMachineRoot_CorrectOrCustomInstall_ReturnsNull()
+    {
+        var programFiles = Path.Combine(testRoot, "Program Files");
+
+        Assert.IsNull(WindowsPerMachineMigration.GetKnownMisplacedPerMachineRoot(
+            Path.Combine(programFiles, "Shisui", "Shisui.exe"),
+            programFiles));
+        Assert.IsNull(WindowsPerMachineMigration.GetKnownMisplacedPerMachineRoot(
+            Path.Combine(testRoot, "Custom", "Shisui", "Shisui.exe"),
+            programFiles));
+    }
+
+    [TestMethod]
+    public void GetApprovedLegacyCleanupRoot_ProtectedMarkerOnlyAllowsKnownRoots()
+    {
+        var programFiles = Path.Combine(testRoot, "Program Files");
+        var expectedPerUserRoot = Path.Combine(testRoot, "LocalAppData", "Shisui");
+        var driveRootInstall = Path.Combine(Path.GetPathRoot(programFiles)!, "Shisui");
+        var authorInstall = Path.Combine(programFiles, "ゆろち", "Shisui");
+
+        Assert.AreEqual(
+            Path.GetFullPath(expectedPerUserRoot),
+            WindowsPerMachineMigration.GetApprovedLegacyCleanupRoot(
+                expectedPerUserRoot, expectedPerUserRoot, programFiles, true));
+        Assert.AreEqual(
+            Path.GetFullPath(driveRootInstall),
+            WindowsPerMachineMigration.GetApprovedLegacyCleanupRoot(
+                driveRootInstall, expectedPerUserRoot, programFiles, true));
+        Assert.AreEqual(
+            Path.GetFullPath(authorInstall),
+            WindowsPerMachineMigration.GetApprovedLegacyCleanupRoot(
+                authorInstall, expectedPerUserRoot, programFiles, true));
+        Assert.IsNull(WindowsPerMachineMigration.GetApprovedLegacyCleanupRoot(
+            Path.Combine(testRoot, "Unrelated", "Shisui"),
+            expectedPerUserRoot,
+            programFiles,
+            true));
+        Assert.IsNull(WindowsPerMachineMigration.GetApprovedLegacyCleanupRoot(
+            driveRootInstall,
+            expectedPerUserRoot,
+            programFiles,
+            false));
+    }
+
+    [TestMethod]
+    public void HasLegacyInstallationArtifacts_UpdateExeOrPackagesOnly_ReturnsTrue()
+    {
+        var legacyRoot = Path.Combine(testRoot, "LocalAppData", "Shisui");
+        Directory.CreateDirectory(legacyRoot);
+        File.WriteAllText(Path.Combine(legacyRoot, "Update.exe"), "old");
+
+        Assert.IsTrue(WindowsPerMachineMigration.HasLegacyInstallationArtifacts(legacyRoot));
+
+        File.Delete(Path.Combine(legacyRoot, "Update.exe"));
+        Directory.CreateDirectory(Path.Combine(legacyRoot, "packages"));
+
+        Assert.IsTrue(WindowsPerMachineMigration.HasLegacyInstallationArtifacts(legacyRoot));
+    }
+
+    [TestMethod]
+    public void HasLegacyInstallationArtifacts_UnrelatedEmptyRoot_ReturnsFalse()
+    {
+        var legacyRoot = Path.Combine(testRoot, "LocalAppData", "Shisui");
+        Directory.CreateDirectory(legacyRoot);
+
+        Assert.IsFalse(WindowsPerMachineMigration.HasLegacyInstallationArtifacts(legacyRoot));
+    }
+
+    [TestMethod]
+    public void CreateMsiInstallStartInfo_ForcesProgramFilesShisui()
+    {
+        var msiPath = Path.Combine(testRoot, "Shisui-win.msi");
+        var systemDirectory = Path.Combine(testRoot, "Windows", "System32");
+        var programFilesDirectory = Path.Combine(testRoot, "Program Files");
+
+        var startInfo = WindowsPerMachineMigration.CreateMsiInstallStartInfo(
+            msiPath,
+            systemDirectory,
+            programFilesDirectory);
+
+        Assert.AreEqual(Path.Combine(systemDirectory, "msiexec.exe"), startInfo.FileName);
+        Assert.IsTrue(startInfo.UseShellExecute);
+        Assert.AreEqual("runas", startInfo.Verb);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "/i",
+                msiPath,
+                $"VELOPACK_INSTALLDIR={Path.Combine(programFilesDirectory, "Shisui")}",
+                "/passive",
+                "/norestart",
+            },
+            startInfo.ArgumentList.ToArray());
+    }
+
+    [TestMethod]
+    public void CreateMsiInstallStartInfo_RelativeMsiPath_Throws()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => WindowsPerMachineMigration.CreateMsiInstallStartInfo(
+            "Shisui-win.msi",
+            Path.Combine(testRoot, "Windows", "System32"),
+            Path.Combine(testRoot, "Program Files")));
+    }
+
+    [TestMethod]
+    public void CreateMsiInstallStartInfo_ProgramFilesIsDriveRoot_Throws()
+    {
+        var driveRoot = Path.GetPathRoot(testRoot)!;
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => WindowsPerMachineMigration.CreateMsiInstallStartInfo(
+            Path.Combine(testRoot, "Shisui-win.msi"),
+            Path.Combine(testRoot, "Windows", "System32"),
+            driveRoot));
+    }
+
+    [TestMethod]
+    public void CreateMsiInstallStartInfo_ReinstallForcesAllFeaturesAndRecachesPackage()
+    {
+        var msiPath = Path.Combine(testRoot, "Shisui-win.msi");
+        var systemDirectory = Path.Combine(testRoot, "Windows", "System32");
+        var programFilesDirectory = Path.Combine(testRoot, "Program Files");
+
+        var startInfo = WindowsPerMachineMigration.CreateMsiInstallStartInfo(
+            msiPath,
+            systemDirectory,
+            programFilesDirectory,
+            reinstallExistingProduct: true);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "/i",
+                msiPath,
+                $"VELOPACK_INSTALLDIR={Path.Combine(programFilesDirectory, "Shisui")}",
+                "REINSTALL=ALL",
+                "REINSTALLMODE=vamus",
+                "/passive",
+                "/norestart",
+            },
+            startInfo.ArgumentList.ToArray());
+    }
+
+    [TestMethod]
+    public void TryDeleteTreeWithoutFollowingReparsePoints_LockedFile_RemovesUnlockedSiblingAndRetries()
+    {
+        var legacyRoot = Path.Combine(testRoot, "LocalAppData", "Shisui");
+        Directory.CreateDirectory(legacyRoot);
+        var lockedPath = Path.Combine(legacyRoot, "000-locked.bin");
+        var removablePath = Path.Combine(legacyRoot, "999-removable.bin");
+        File.WriteAllText(lockedPath, "locked");
+        File.WriteAllText(removablePath, "removable");
+
+        using (var lockedFile = new FileStream(lockedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            WindowsPerMachineMigration.TryDeleteTreeWithoutFollowingReparsePoints(legacyRoot);
+
+            Assert.IsTrue(File.Exists(lockedPath));
+            Assert.IsFalse(File.Exists(removablePath));
+            Assert.IsTrue(Directory.Exists(legacyRoot));
+        }
+
+        WindowsPerMachineMigration.TryDeleteTreeWithoutFollowingReparsePoints(legacyRoot);
+
+        Assert.IsFalse(Directory.Exists(legacyRoot));
     }
 
     [TestMethod]
@@ -81,14 +298,20 @@ public class WindowsPerMachineMigrationTests
         File.WriteAllText(Path.Combine(legacyPrograms, "Shisui.lnk"), "old");
         File.WriteAllText(Path.Combine(desktop, "Shisui.lnk"), "old");
 
+        string? refreshedDirectory = null;
         var cleaned = WindowsPerMachineMigration.TryCleanupLegacyArtifacts(
-            legacyRoot, legacyRoot, programs, desktop);
+            legacyRoot,
+            legacyRoot,
+            programs,
+            desktop,
+            directory => refreshedDirectory = directory);
 
         Assert.IsTrue(cleaned);
         Assert.IsFalse(Directory.Exists(legacyRoot));
         Assert.IsFalse(File.Exists(Path.Combine(programs, "Shisui.lnk")));
         Assert.IsFalse(Directory.Exists(legacyPrograms));
         Assert.IsFalse(File.Exists(Path.Combine(desktop, "Shisui.lnk")));
+        Assert.AreEqual(programs, refreshedDirectory);
     }
 
     [TestMethod]
