@@ -293,10 +293,12 @@ try {
         $msiUrl = "$BaseUrl/$($msi.Name)"
         $response = Invoke-WebRequest -Method Head -Uri "${msiUrl}?_=$([Guid]::NewGuid().ToString('N'))" `
             -Headers @{ 'Cache-Control' = 'no-cache' } -TimeoutSec 30
-        $remoteLengths = @($response.Headers.'Content-Length') |
-            ForEach-Object { $_ -split ',' } |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ }
+        $remoteLengths = @(
+            @($response.Headers.'Content-Length') |
+                ForEach-Object { $_ -split ',' } |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ }
+        )
         if ($remoteLengths.Count -eq 0) {
             throw "remote MSI の Content-Length を取得できません: $msiUrl"
         }
